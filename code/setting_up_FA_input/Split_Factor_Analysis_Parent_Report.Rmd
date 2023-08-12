@@ -1,0 +1,167 @@
+---
+title: "ABCD Factor Analysis"
+author: "Grace Jacobs"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#library(lavaan)
+
+library(multiplex)
+library(psych)
+library(EFA.dimensions)
+
+
+source("split_parent_report_data_setup.R")
+source("validation_measures.R")
+
+
+# family ID
+relationship <- read.table("../data/Demographics/acspsw03.txt", sep="\t", header=TRUE)
+relationship <- relationship[which(relationship$eventname == "baseline_year_1_arm_1"), ] #11875
+relationship <- relationship[ , c("subjectkey", "rel_family_id", "sex", "interview_age", "race_ethnicity")]
+relationship <- na.omit(relationship)
+
+## site ../../data 
+site <- read.table("../data/Demographics/abcd_lt01.txt", sep="\t", header=TRUE)
+site <- site[which(site$eventname == "baseline_year_1_arm_1"), ]
+site <- site[ , c("subjectkey", "site_id_l")]
+site <- na.omit(site)
+
+
+### First half
+data <- merge(cbcl_included, man_included, by= "subjectkey")
+data <- merge(data, social_included, by= "subjectkey")
+
+data <- na.omit(data)
+
+data <- merge(data, site, by= "subjectkey")
+data <- merge(data, relationship, by= "subjectkey")
+
+data$race_ethnicity <- as.numeric(data$race_ethnicity)
+data[is.na(data)] <- 999
+
+data <- data %>% select(!starts_with("subjectkey"))
+
+table(data$cbcl_q59_p, data$cbcl_q70_p)
+table(data$cbcl_q59_p)
+
+########################################################
+# checking to see if any of the combinations of variables are too highly correlated
+items <- data
+items$subjectkey <- NULL
+r <- polychoric(items) # psych package
+corr_matrix <- as.data.frame(r[["rho"]])
+check <- as.data.frame(corr_matrix>0.85)
+check <- check %>%
+  gather(Measure, Value) %>% 
+  dplyr::group_by(Measure, Value) %>%         
+  dplyr::summarise(Count = n())
+check <- check[which(check$Value == "TRUE"), ]
+check <- check[which(check$Count > 1), ] #
+
+# checking to see if they have enough variance with the final sample
+items <- data
+items$subjectkey <- NULL
+variance <- items %>%
+  gather(Measure, Value) %>% 
+  dplyr::group_by(Measure, Value) %>%         
+  dplyr::summarise(Count = n())
+variance$Percent <- (variance$Count/nrow(items))*100
+low_0 <- variance[which(variance$Percent > 99.499), ]
+
+######################################################################
+
+# will keep the below line for outputing the data to be used in the mplus models
+
+data$site_id_l <- gsub("site", "", data$site_id_l)
+data$sex <- gsub("M", "1", data$sex)
+data$sex <- gsub("F", "0", data$sex)
+
+#cleaning up the names for the mplus model requirements
+names <- colnames(data)
+names <- gsub("_p", replacement = "", x = names)
+#names <- gsub("_q", replacement = "_", x = names)
+names <- gsub("distracted", replacement = "distract", x = names)
+names <- gsub("gen_child_behav", replacement = "mania", x = names)
+
+
+PR_firsthalf_input_items <- data
+PR_firsthalf_names <- as.data.frame(t(names))
+
+write.dat(PR_firsthalf_input_items, "../output/")
+write.dat(PR_firsthalf_names, "../output/")
+
+```
+
+## Second half
+
+```{r, echo=FALSE}
+
+data <- merge(cbcl_secondhalf, man_secondhalf, by= "subjectkey")
+data <- merge(data, social_secondhalf, by= "subjectkey")
+
+########################################################
+# checking to see if any of the combinations of variables are too highly correlated
+items <- data
+items$subjectkey <- NULL
+r <- polychoric(items) # psych package
+corr_matrix <- as.data.frame(r[["rho"]])
+check <- as.data.frame(corr_matrix>0.85)
+check <- check %>%
+  gather(Measure, Value) %>% 
+  dplyr::group_by(Measure, Value) %>%         
+  dplyr::summarise(Count = n())
+check <- check[which(check$Value == "TRUE"), ]
+check <- check[which(check$Count > 1), ] #
+
+# checking to see if they have enough variance with the final sample
+items <- data
+items$subjectkey <- NULL
+variance <- items %>%
+  gather(Measure, Value) %>% 
+  dplyr::group_by(Measure, Value) %>%         
+  dplyr::summarise(Count = n())
+variance$Percent <- (variance$Count/nrow(items))*100
+low_0 <- variance[which(variance$Percent > 99.499), ]
+# cbcl 67 is quite close to the cut off (Runs away from home)
+#data$cbcl_q67_p <- NULL
+######################################################################
+
+data <- merge(data, site, by= "subjectkey")
+data <- merge(data, relationship, by= "subjectkey")
+
+data <- merge(data, validation, by= "subjectkey", all.x=TRUE)
+data <- data %>% mutate_all(na_if,"")
+data$race_ethnicity <- as.numeric(data$race_ethnicity)
+
+data[is.na(data)] <- 999
+
+data <- data %>% select(!starts_with("subjectkey"))
+
+
+data$site_id_l <- gsub("site", "", data$site_id_l)
+data$sex <- gsub("M", "1", data$sex)
+data$sex <- gsub("F", "0", data$sex)
+
+
+#cleaning up the names for the mplus model requirements
+names <- colnames(data)
+names <- gsub("_p", replacement = "", x = names)
+names <- gsub("distracted", replacement = "distract", x = names)
+names <- gsub("gen_child_behav", replacement = "mania", x = names)
+
+FA_items_secondhalf_validation_nov <- data
+names_secondhalf_validation_nov <- as.data.frame(t(names))
+
+PR_secondthalf_input_items <- data
+PR_secondhalf_names <- as.data.frame(t(names))
+
+write.dat(PR_secondthalf_input_items, "../output/")
+write.dat(PR_secondhalf_names, "../output/")
+
+```
+
+

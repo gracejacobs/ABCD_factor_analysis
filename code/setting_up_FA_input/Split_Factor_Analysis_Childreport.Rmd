@@ -1,0 +1,204 @@
+---
+title: "Factor_Analysis_Childreport"
+author: "Grace Jacobs"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+#library(lavaan)
+library(ggplot2)
+library(dplyr)
+library(knitr)
+library(tidyr)
+library(psych)
+library(polycor)
+library(tidyverse)
+library(multiplex)
+library(EFA.dimensions)
+
+
+source("split_childreport_data_setup.R")
+source("validation_measures.R")
+
+
+# family ID
+relationship <- read.table("../data/Demographics/acspsw03.txt", sep="\t", header=TRUE)
+relationship <- relationship[which(relationship$eventname == "baseline_year_1_arm_1"), ] #11875
+relationship <- relationship[ , c("subjectkey", "rel_family_id", "sex", "interview_age", "race_ethnicity")]
+
+## site data 
+site <- read.table("../data/Demographics/abcd_lt01.txt", sep="\t", header=TRUE)
+site <- site[which(site$eventname == "baseline_year_1_arm_1"), ]
+site <- site[ , c("subjectkey", "site_id_l")]
+site <- na.omit(site)
+
+
+data <- merge(bisbas_sample, delinq_sample, by="subjectkey")
+data <- merge(data, mania_sample, by="subjectkey")
+data <- merge(data, pos_aff_sample, by="subjectkey")
+data <- merge(data, problem_sample, by="subjectkey")
+data <- merge(data, psychosis_sample, by="subjectkey")
+data <- merge(data, upps_sample, by="subjectkey")
+
+
+table(data$prodromal_1_y, data$delq_4_y)
+table(data$delq_2_y, data$delq_4_y)
+
+########################################################
+# checking to see if any of the combinations of variables are too highly correlated
+# these results might depend on the individual random split of the data
+items <- data
+items <- merge(pos_aff_sample, delinq_sample)
+items$subjectkey <- NULL
+r <- polychoric(items) # psych package
+corr_matrix <- as.data.frame(r[["rho"]])
+check <- as.data.frame(corr_matrix>0.85)
+check <- check %>%
+  gather(Measure, Value) %>% 
+  dplyr::group_by(Measure, Value) %>%         
+  dplyr::summarise(Count = n())
+check <- check[which(check$Value == "TRUE"), ]
+check <- check[which(check$Count > 1), ]
+
+# checking to see if they have enough variance with the final sample
+items <- data
+items$subjectkey <- NULL
+variance <- items %>%
+  gather(Measure, Value) %>% 
+  dplyr::group_by(Measure, Value) %>%         
+  dplyr::summarise(Count = n())
+variance$Percent <- (variance$Count/nrow(items))*100
+# no items with too low variance
+low_0 <- variance[which(variance$Percent > 99.49), ]
+# delinquicny #8 and #10 show up
+########################################################################
+
+#write.csv(data, file="../../output/Factor_Analysis/Child_report/Firsthalf_child_report_data.csv", row.names = FALSE)
+data <- merge(data, site, by="subjectkey")
+data <- merge(data, relationship, by="subjectkey")
+
+data <- merge(data, validation, by= "subjectkey", all.x=TRUE)
+data <- data %>% mutate_all(na_if,"")
+
+FA_input_items <- data
+table(FA_input_items$race_ethnicity, exclude=NULL)
+FA_input_items$race_ethnicity <- as.numeric(FA_input_items$race_ethnicity)
+
+FA_input_items[is.na(FA_input_items)] <- 999
+
+FA_input_items$subjectkey <- NULL
+
+FA_input_items$sex <- gsub("M", "1", FA_input_items$sex)
+FA_input_items$sex <- gsub("F", "0", FA_input_items$sex)
+#FA_input_items$race_ethnicity <- gsub(NA, "999", FA_input_items$race_ethnicity)
+
+names <- colnames(FA_input_items)
+names <- gsub("_nihtb", replacement = "", x = names)
+names <- gsub("prodromal", replacement = "psy", x = names)
+names <- gsub("_y", replacement = "", x = names)
+names <- gsub("rel_", replacement = "", x = names)
+
+FA_input_items$site_id_l <- gsub("site", "", FA_input_items$site_id_l)
+FA_input_items$site_id_l <- as.numeric(FA_input_items$site_id_l)
+FA_input_items$rel_family_id <- as.numeric(FA_input_items$rel_family_id)
+
+names <- t(as.data.frame(names))
+
+FA_input_items_firsthalf_nov <- FA_input_items
+names_firsthalf_nov <- names
+
+table(FA_input_items_firsthalf_nov$del)
+
+write.dat(FA_input_items_firsthalf_nov, "../output/")
+write.dat(names_firsthalf_nov, "../output/")
+
+# write.dat(FA_input_items_firsthalf, "../../output/Factor_Analysis/Child_report/")
+# write.dat(names_firsthalf, "../../output/Factor_Analysis/Child_report/")
+
+
+```
+
+
+## Second half
+
+```{r, echo=FALSE}
+
+data <- merge(bisbas_secondhalf, delinq_secondhalf, by="subjectkey")
+data <- merge(data, mania_secondhalf, by="subjectkey")
+data <- merge(data, pos_aff_secondhalf, by="subjectkey")
+data <- merge(data, problem_secondhalf, by="subjectkey")
+data <- merge(data, psychosis_secondhalf, by="subjectkey")
+data <- merge(data, upps_secondhalf, by="subjectkey")
+
+########################################################
+# checking to see if any of the combinations of variables are too highly correlated
+items <- data
+items <- delinq_secondhalf
+items$subjectkey <- NULL
+r <- polychoric(items) # psych package
+corr_matrix <- as.data.frame(r[["rho"]])
+check <- as.data.frame(corr_matrix>0.85)
+check <- check %>%
+  gather(Measure, Value) %>% 
+  dplyr::group_by(Measure, Value) %>%         
+  dplyr::summarise(Count = n())
+check <- check[which(check$Value == "TRUE"), ]
+check <- check[which(check$Count > 1), ] #none of the items are too highly correlated
+# delinquincy #5 and 6 don't show up here
+
+# checking to see if they have enough variance with the final sample
+items <- data
+#items <- delinq_secondhalf
+items$subjectkey <- NULL
+variance <- items %>%
+  gather(Measure, Value) %>% 
+  dplyr::group_by(Measure, Value) %>%         
+  dplyr::summarise(Count = n())
+variance$Percent <- (variance$Count/nrow(items))*100
+# no items with too low variance
+low_0 <- variance[which(variance$Percent > 99.49), ]
+# delinquicny #8 and #10 show up
+########################################################################
+
+
+table(data$prodromal_1_y, data$delq_4_y)
+table(data$delq_2_y, data$delq_4_y)
+
+data <- merge(data, site, by= "subjectkey")
+data <- merge(data, relationship, by= "subjectkey")
+#data <- na.omit(data)
+
+data <- merge(data, validation, by= "subjectkey", all.x=TRUE)
+data <- data %>% mutate_all(na_if,"")
+
+data$race_ethnicity <- as.numeric(data$race_ethnicity)
+
+data[is.na(data)] <- 999
+
+data <- data %>% select(!starts_with("subjectkey"))
+
+
+data$site_id_l <- gsub("site", "", data$site_id_l)
+data$sex <- gsub("M", "1", data$sex)
+data$sex <- gsub("F", "0", data$sex)
+
+names <- colnames(data)
+names <- gsub("_nihtb", replacement = "", x = names)
+names <- gsub("prodromal", replacement = "psy", x = names)
+names <- gsub("_y", replacement = "", x = names)
+names <- gsub("rel_", replacement = "", x = names)
+
+FA_input_items_secondhalf_nov <- data
+names_secondhalf_nov <- as.data.frame(t(names))
+
+write.dat(FA_input_items_secondhalf_nov, "../output/")
+write.dat(names_secondhalf_nov, "../output/")
+
+```
+
+
+
+
+
+

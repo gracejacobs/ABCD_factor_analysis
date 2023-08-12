@@ -1,0 +1,105 @@
+---
+title: "Factor_Analysis_Childreport"
+author: "Grace Jacobs"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+#library(lavaan)
+library(ggplot2)
+library(dplyr)
+library(knitr)
+library(tidyr)
+library(psych)
+library(polycor)
+library(tidyverse)
+library(multiplex)
+library(EFA.dimensions)
+
+source("childreport_data_setup.R")
+source("validation_measures.R")
+
+# family ID
+relationship <- read.table("../data/Demographics/acspsw03.txt", sep="\t", header=TRUE)
+relationship <- relationship[which(relationship$eventname == "baseline_year_1_arm_1"), ] #11875
+relationship <- relationship[ , c("subjectkey", "rel_family_id", "sex")]
+relationship <- na.omit(relationship)
+
+## site data 
+site <- read.table("../data/Demographics/abcd_lt01.txt", sep="\t", header=TRUE)
+site <- site[which(site$eventname == "baseline_year_1_arm_1"), ]
+site <- site[ , c("subjectkey", "site_id_l", "interview_age")]
+site <- na.omit(site)
+
+data <- merge(psychosis, mania)
+data <- merge(data, problem)
+data <- merge(data, delinq)
+data <- merge(data, pos_aff)
+data <- merge(data, upps)
+data <- merge(data, bisbas)
+
+########################################################
+# checking to see if any of the combinations of variables are too highly correlated
+items <- data
+items$subjectkey <- NULL
+r <- polychoric(items) # psych package
+corr_matrix <- as.data.frame(r[["rho"]])
+check <- as.data.frame(corr_matrix>0.85)
+check <- check %>%
+  gather(Measure, Value) %>% 
+  dplyr::group_by(Measure, Value) %>%         
+  dplyr::summarise(Count = n())
+check <- check[which(check$Value == "TRUE"), ]
+check <- check[which(check$Count > 1), ] 
+
+# checking to see if they have enough variance with the final sample
+variance <- items %>%
+  gather(Measure, Value) %>% 
+  dplyr::group_by(Measure, Value) %>%         
+  dplyr::summarise(Count = n())
+variance$Percent <- (variance$Count/nrow(items))*100
+# no items with too low variance
+low_0 <- variance[which(variance$Percent > 99.49), ]
+# delinquicny #8 and #10 show up
+
+
+######################################################################
+data <- merge(data, site)
+data <- merge(data, relationship)
+
+data <- na.omit(data)
+data <- merge(data, validation, by= "subjectkey", all.x=TRUE)
+data <- data %>% mutate_all(na_if,"")
+data[is.na(data)] <- 999
+# removing the subjectkey column
+data <- data %>% select(!starts_with("subjectkey"))
+
+FA_input_items <- data
+
+FA_input_items$sex <- gsub("M", "1", FA_input_items$sex)
+FA_input_items$sex <- gsub("F", "0", FA_input_items$sex)
+FA_input_items$site_id_l <- gsub("site", "", FA_input_items$site_id_l)
+
+names <- colnames(FA_input_items)
+names <- gsub("_nihtb", replacement = "", x = names)
+names <- gsub("prodromal", replacement = "psy", x = names)
+names <- gsub("_y", replacement = "", x = names)
+names <- gsub("rel_", replacement = "", x = names)
+names <- t(as.data.frame(names))
+
+CR_full_input_items <- FA_input_items
+CR_full_names <- names
+
+write.dat(CR_full_input_items, "../output/")
+write.dat(CR_full_names, "../output/")
+
+```
+
+
+
+
+
+
+
+
+
